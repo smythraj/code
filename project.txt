@@ -1,0 +1,172 @@
+//SQL CODE 
+
+CREATE TABLE [dbo].[Tbl_Department] (
+[Id] INT IDENTITY (1, 1) NOT NULL,
+[Name] VARCHAR (50) NOT NULL,
+PRIMARY KEY CLUSTERED ([Id] ASC)
+);
+GO;
+CREATE TABLE [dbo].[Tbl_Employee] (
+    [Id]          INT          IDENTITY (1, 1) NOT NULL,
+    [FirstName]   VARCHAR (50) NOT NULL,
+    [MiddleName]  VARCHAR (50) NULL,
+    [LastName]    VARCHAR (50) NOT NULL,
+    [DOB]         DATETIME     NULL,
+    [Designation] VARCHAR (50) NOT NULL,
+    [ReportingTo] VARCHAR (50) NULL,
+    [Salary]      INT          NULL,
+    PRIMARY KEY CLUSTERED ([Id] ASC)
+);
+GO;
+CREATE PROCEDURE [dbo].GetEmployees 
+ 
+AS
+ SELECT * from Tbl_Employee
+ 
+GO;
+CREATE PROCEDURE [dbo].InsertOrUpdateEmployee
+ @FirstName varchar(50),
+ @MiddleName varchar(50),
+ @LastName varchar(50),
+ @DOB datetime,
+ @Designation varchar(50),
+ @ReportingTo varchar(50),
+ @Salary int,
+ @Id int = 0
+as
+BEGIN
+ if (@Id = 0) 
+  INSERT INTO [dbo].[Tbl_Employee] ([FirstName], [MiddleName], [LastName], [DOB], [Designation], [ReportingTo], [Salary]) 
+  VALUES (@FirstName,@MiddleName, @LastName, @DOB, @Designation, @ReportingTo, @Salary)
+ else
+  update [Tbl_Employee] set [FirstName] = @FirstName, [MiddleName] = @MiddleName, [LastName]=@LastName, [DOB]=@DOB, [Designation]=@Designation, [ReportingTo] = @ReportingTo, [Salary]=@Salary
+  where Id = @Id
+ end
+END
+GO;
+CREATE PROCEDURE [dbo].GetEmployeeWithDepartment
+ 
+AS
+ SELECT * from Tbl_Employee
+  
+ SELECT * from Tbl_Department
+
+
+
+//node.js
+var express = require('express');
+var bodyParser = require('body-parser');
+var app = express();
+var port = process.env.port || 3300
+app.listen(port, () => {
+    console.log("Hi This port is running");
+});
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(bodyParser.json());
+var router = require('./routes')();
+ 
+app.use('/api', router);
+
+var Connection = require('tedious').Connection;
+var config = {
+    server: '#######',
+    authentication: {
+        type: 'default',
+        options: {
+            userName: 'sa',
+            password: '#####'
+        }
+    },
+    options: {
+        database: '###',
+        instanceName: 'Sqlexpress',
+        rowCollectionOnDone: true,
+        useColumnNames: false
+    }
+}
+var connection = new Connection(config);
+connection.on('connect', function (err) {
+    if (err) {
+        console.log(err);
+    } else {
+        console.log('Connected');
+    }
+});
+module.exports = connection;
+var Request = require('tedious').Request;
+var connection = require('./connect');
+var utility = require('./utility/utility');
+function spGetExecute(qry, callback) {
+    var data = [];
+    var dataset = [];
+    var resultset = 0;
+    request = new Request(qry, function (err, rowCount) {
+        utility.sendDbResponse(err, rowCount, dataset, callback);
+});
+request.on('row', function (columns) {
+        utility.buildRow(columns, data);
+});
+request.on('doneInProc', function (rowCount, more, rows) {
+        dataset.push(data);
+        data = [];
+    });
+connection.callProcedure(request);
+}
+module.exports = {
+    get: spGetExecute 
+};
+function spPostExecute(qry, params, callback) {
+    var newdata = [];
+request = new Request(qry, function (err, rowCount) {
+        utility.sendDbResponse(err, rowCount, newdata, callback);
+    });
+params.forEach(param => {
+request.addParameter(param.name, param.type, param.val);
+});
+request.on('row', function (columns) {
+        utility.buildRow(columns, newdata);
+    });
+connection.callProcedure(request);
+}
+function spPostExecute(qry, params, callback) {
+    var newdata = [];
+request = new Request(qry, function (err, rowCount) {
+        utility.sendDbResponse(err, rowCount, newdata, callback);
+    });
+params.forEach(param => {
+request.addParameter(param.name, param.type, param.val);
+});
+request.on('row', function (columns) {
+        utility.buildRow(columns, newdata);
+    });
+connection.callProcedure(request);
+}
+const _employeeRepository = require('./employee.respository');
+const dbContext = require('../../Database/dbContext');
+module.exports = function (router) {
+    const employeeRepository = _employeeRepository(dbContext);
+router.route('/employees')
+        .get(employeeRepository.getAll)
+        .post(employeeRepository.post);
+        
+    router.route('/employees/department')
+    .get(employeeRepository.getMulti);
+router.use('/employees/:employeeId', employeeRepository.intercept);
+router.route('/employees/:employeeId')
+        .get(employeeRepository.get)
+        .put(employeeRepository.put)
+        .delete(employeeRepository.delete);
+}
+
+
+
+
+/// express code
+const express = require('express');
+function eRoutes() {
+    const router = express.Router();
+    var employee = require('./repository/employee/employee.routes')(router);
+    var department = require('./repository/department/department.routes')(router);
+    return router;
+}
+module.exports = eRoutes;
